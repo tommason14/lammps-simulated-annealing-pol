@@ -1,0 +1,65 @@
+units           real
+boundary        p p p
+neighbor        2.0 bin
+neigh_modify    every 1 delay 0 check yes
+
+atom_style      full
+bond_style      harmonic
+angle_style     harmonic
+dihedral_style  opls
+improper_style  cvff
+pair_style      hybrid/overlay lj/cut/coul/long 12.0 12.0 coul/long/cs 12.0 thole 2.6 12.0
+kspace_style    pppm 1e-5
+special_bonds   lj/coul 0.0 0.0 0.5
+
+read_data anion-centred-cluster-1-pol.data extra/special/per/atom 3 
+include pair-drude.lmp 
+
+group ATOMS type 1 2 3 4 5 6 7 8 9 10 11 12 13
+group CORES type 1 2 3 4 5 6 7 12 13
+group DRUDES type 14 15 16 17 18 19 20 21 22
+
+fix DRUDE all drude C C C C C C C N N N N C C D D D D D D D D D
+fix SHAKE ATOMS shake 0.0001 20 0 b 3 4 7 10 12 14
+fix MOM all momentum 100 linear 1 1 1
+comm_modify vel yes 
+
+timestep        1
+
+fix wall1 all   wall/lj93 xlo  -20.0 5.0 3.7 2.5 pbc yes
+fix wall2 all   wall/lj93 xhi  20.0 5.0 3.7 2.5 pbc yes
+fix wall3 all   wall/lj93 ylo  -20.0 5.0 3.7 2.5 pbc yes
+fix wall4 all   wall/lj93 yhi  20.0 5.0 3.7 2.5 pbc yes
+fix wall5 all   wall/lj93 zlo  -20.0 5.0 3.7 2.5 pbc yes
+fix wall6 all   wall/lj93 zhi  20.0 5.0 3.7 2.5 pbc yes
+
+restart         1000 run.restart1 run.restart2
+
+variable TA equal 400
+variable TD equal 1
+
+##########################################
+#  equilibrate for 1 ns, cool for 10 ns  #
+##########################################
+
+velocity ATOMS create ${TA} ${TA} dist gaussian
+velocity DRUDES create ${TD} ${TD} dist gaussian
+
+fix nvt all tgnvt/drude temp ${TA} ${TA} 100 ${TD} 20
+
+thermo 100
+thermo_style custom step f_nvt[1] f_nvt[2] f_nvt[3] press vol density pe ke etotal enthalpy evdwl ecoul epair 
+
+dump d1 ATOMS  custom 10000 equilibrate.lmp element xu yu zu
+dump_modify d1 element C C C C C C C H H H H N O D D D D D D D D D
+dump_modify d1 sort id
+run             1000000
+undump d1
+unfix nvt
+
+fix nvt all tgnvt/drude temp ${TA} 10 100 ${TD} 20
+
+dump d1 ATOMS   custom 10000 cooling.lmp element xu yu zu
+dump_modify d1  element C C C C C C C H H H H N O D D D D D D D D D
+dump_modify d1  sort id
+run             10000000
